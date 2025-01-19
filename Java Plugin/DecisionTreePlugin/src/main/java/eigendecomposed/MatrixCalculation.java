@@ -1,14 +1,12 @@
 package eigendecomposed;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.math3.linear.BlockRealMatrix;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.util.Precision;
 
 import definition.EdgeList2;
 import definition.NodeList2;
@@ -44,42 +42,46 @@ public class MatrixCalculation {
             return laplacian_matrix;
         }
     }
-
-    /**
-     * Converts an edge list into an adjacency matrix.
-     *
-     * @param edge_list The edge list to convert.
-     * @return RealMatrix representing the adjacency matrix.
-     */
-    public static RealMatrix convertToAdjacencyMatrix(ArrayList<EdgeList2> edge_list) {
-        // Collect unique node indices from the edge list
-        Set<String> unique_indices = new HashSet<>();
-        for (EdgeList2 edge : edge_list) {
-            unique_indices.add(edge.getSource());
-            unique_indices.add(edge.getTarget());
+    
+    public static RealMatrix convertToAdjacencyMatrix(ArrayList<EdgeList2> edgeList, ArrayList<NodeList2> nodeList) {
+        // Map unique node IDs from nodeList to sequential indices
+        Map<Float, Integer> indexMap = new HashMap<>();
+        int index = 0;
+        for (NodeList2 node : nodeList) {
+            indexMap.put(node.getIndex(), index++);
         }
 
-        // Determine the dimension of the adjacency matrix
-        int dimension = unique_indices.size();
+        // Use the size of nodeList to create the adjacency matrix
+        int dimension = nodeList.size();
+        double[][] adjacencyMatrixData = new double[dimension][dimension];
 
-        // Initialize the adjacency matrix data array
-        double[][] adjacency_matrix_data = new double[dimension][dimension];
+        // Populate the adjacency matrix based on the edgeList
+        for (EdgeList2 edge : edgeList) {
+            float source = edge.getSource();
+            float target = edge.getTarget();
 
-        // Populate the adjacency matrix with edge weights
-        for (EdgeList2 edge : edge_list) {
-            int i = Integer.parseInt(edge.getSource());
-            int j = Integer.parseInt(edge.getTarget());
+            // Ensure the source and target exist in the index map
+            if (!indexMap.containsKey(source) || !indexMap.containsKey(target)) {
+                throw new IllegalArgumentException("Edge source/target not found in node list - Source: " + source + ", Target: " + target);
+            }
 
-            double weight = edge.getWeight();
+            int i = indexMap.get(source);
+            int j = indexMap.get(target);
 
-            adjacency_matrix_data[i][j] = weight;
-            adjacency_matrix_data[j][i] = weight; // For undirected graphs
+            // Boundary check for matrix dimensions
+            if (i >= adjacencyMatrixData.length || j >= adjacencyMatrixData.length) {
+                throw new IllegalArgumentException("Matrix index out of bounds: i=" + i + ", j=" + j);
+            }
+
+            adjacencyMatrixData[i][j] = edge.getWeight();
+            adjacencyMatrixData[j][i] = edge.getWeight(); // If the graph is undirected
         }
 
-        // Create the adjacency matrix from the data array
-        RealMatrix adjacency_matrix = new BlockRealMatrix(adjacency_matrix_data);
-        return adjacency_matrix;
+        // Return the adjacency matrix as a RealMatrix
+        return new BlockRealMatrix(adjacencyMatrixData);
     }
+
+
 
     /**
      * Converts a list of nodes into an X matrix containing eigenvector properties.
@@ -123,6 +125,10 @@ public class MatrixCalculation {
      */
     public static RealMatrix calculateLaplacianMatrix(RealMatrix degree_matrix, RealMatrix adjacency_matrix, String algorithm) {
         try {
+            if (degree_matrix.getRowDimension() != adjacency_matrix.getRowDimension()) {
+                throw new IllegalStateException("Mismatch in matrix dimensions between degree and adjacency matrices.");
+            }
+        	
             RealMatrix laplacian_matrix;
 
             // Choose the Laplacian matrix calculation method based on the algorithm parameter
@@ -242,7 +248,11 @@ public class MatrixCalculation {
                 }
             }
 
-            D_local[i] = neighbor_count > 0 ? sum_neighbors / degree_vector[i] : 0;  // Zero for isolated nodes
+            if (neighbor_count > 0 && degree_vector[i] > 0) {
+                D_local[i] = sum_neighbors / degree_vector[i];
+            } else {
+                D_local[i] = 0;  // Zero for isolated nodes or zero-degree nodes
+            }
         }
 
         // Compute D_local^(-1/2)

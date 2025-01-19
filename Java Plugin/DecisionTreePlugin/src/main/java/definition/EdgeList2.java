@@ -3,13 +3,13 @@ package definition;
 import java.util.Map;
 
 public class EdgeList2 {
-    private String source;
-    private String target;
+    private float source;
+    private float target;
     private double weight;
     private long index;
     private Map<String, Object> relationshipProperties;
 
-    public EdgeList2(String source, String target, double weight, long index,Map<String, Object> relationshipProperties) {
+    public EdgeList2(float source, float target, double weight, long index,Map<String, Object> relationshipProperties) {
         this.source = source;
         this.target = target;
         this.weight = weight;
@@ -17,19 +17,19 @@ public class EdgeList2 {
         this.relationshipProperties = relationshipProperties;
     }
 
-    public String getSource() {
+    public float getSource() {
         return source;
     }
 
-    public void setSource(String source) {
+    public void setSource(float source) {
         this.source = source;
     }
 
-    public String getTarget() {
+    public float getTarget() {
         return target;
     }
 
-    public void setTarget(String target) {
+    public void setTarget(float target) {
         this.target = target;
     }
 

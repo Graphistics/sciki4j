@@ -345,7 +345,8 @@ private static String extractID(String node) {
     String[] attributes = node.split(",");
     for (String attr : attributes) {
         String[] keyValue = attr.split(":");
-        if (keyValue.length == 2 && keyValue[0].trim().equalsIgnoreCase("index")) {
+//        if (keyValue.length == 2 && keyValue[0].trim().equalsIgnoreCase("index")) {
+        if (keyValue[0].trim().equalsIgnoreCase("index") || keyValue[0].trim().equalsIgnoreCase("id")) {
             return keyValue[1].trim();
         }
     }
@@ -552,8 +553,9 @@ private static String extractID(String node) {
                 String[] keyValue = entry.split(":");
                 if (keyValue.length > 1) {
                     String key = keyValue[0].trim();
+                    key.toLowerCase();
                     // Only append the entry if it doesn't contain "index" or "id"
-                    if (!key.contains("index") && !key.contains("id") && !key.contains(" index") && !key.contains(" id")) {
+                    if (!key.equalsIgnoreCase("index") && !key.equalsIgnoreCase("id") && !key.equalsIgnoreCase(" index") && !key.equalsIgnoreCase(" id")) {
                         if (result.length() > 0) {
                             result.append(", ");
                         }
@@ -598,8 +600,20 @@ private static String extractID(String node) {
 		String[] endSplit = end.split(",");
 		for(int i = 0; i < startSplit.length; i++)
 		{
+//            String[] startAttr = startSplit[i].split(":");
+//            String[] endAttr = endSplit[i].split(":");
+//
+//            String startKey = startAttr[0].trim();
+//            String endKey = endAttr[0].trim();
+//            float endValue = Float.parseFloat(endAttr[1].trim());
+            
 			float startValue = Float.parseFloat(startSplit[i].split(":")[1]);
 			float endValue = Float.parseFloat(endSplit[i].split(":")[1]);
+//            
+//            if (!startKey.equals(endKey)) {
+//                System.err.println("Attribute key mismatch at index " + i + ". Start: " + startKey + ", End: " + endKey);
+//                throw new IllegalArgumentException("Attribute key mismatch");
+//            }
 			distance = distance + Math.pow((startValue-endValue),2);
 		}
 		distance = Math.sqrt(distance);
@@ -682,9 +696,16 @@ private static String extractID(String node) {
 	
 	//a(i) : Calculate the average distance of point i to other points in its cluster.
 	public static double averageIntraClusterDistance(String point, ArrayList<String> cluster, String distanceMeasure) {
+	    if (cluster.size() <= 1) {
+	        System.err.println("Cluster has only one point or is empty. Point: " + point + ", Cluster: " + cluster);
+	        return 0.0; // No intra-cluster distance for single-point clusters
+	    }
+
 	    double sumDistance = 0.0;
 	    for (String otherPoint : cluster) {
-	        sumDistance += calculateDistance(point, otherPoint, distanceMeasure );
+	    	if (!point.equals(otherPoint)) { // Exclude the point itself
+		        sumDistance += calculateDistance(point, otherPoint, distanceMeasure );
+	        }
 	    }
 	    return sumDistance / (cluster.size() - 1); // Exclude the point itself
 	}
@@ -697,7 +718,7 @@ private static String extractID(String node) {
     	for (String key : allCluster.keySet())
     	{
     		ArrayList<String> cluster = allCluster.get(key);
-    		if(cluster.equals(ownCluster)) continue; // Skip the same cluster contain the point
+    		if(cluster.equals(ownCluster) || cluster.isEmpty()) continue; // Skip the same cluster contain the point
     		double sumDistance = 0.0;
     		for(String otherPoint : cluster) {
     			sumDistance += calculateDistance(point, otherPoint, distanceMeasure);
@@ -767,7 +788,7 @@ private static String extractID(String node) {
             String[] parts = attribute.split(":");
             if (parts.length == 2) {
                 String attributeName = parts[0].trim();
-                if (!attributeName.equals("index") && !attributeName.equals("id")) {
+                if (!attributeName.equalsIgnoreCase("index") && !attributeName.equalsIgnoreCase("id")) {
                     if (cleanedString.length() > 0) {
                         cleanedString.append(", ");
                     }

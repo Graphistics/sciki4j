@@ -3,11 +3,11 @@ package definition;
 import java.util.Map;
 
 public class NodeList2 {
-    private String index;
+    private float index;
     private Map<String, Object> properties;
 
-    public NodeList2(String index2, Map<String, Object> properties) {
-        this.index = index2;
+    public NodeList2(float index, Map<String, Object> properties) {
+        this.index = index;
         this.properties = properties;
     }
 
@@ -17,11 +17,11 @@ public class NodeList2 {
 
 
 
-    public String getIndex() {
+    public float getIndex() {
         return index;
     }
 
-    public void setIndex(String index) {
+    public void setIndex(float index) {
         this.index = index;
     }
 

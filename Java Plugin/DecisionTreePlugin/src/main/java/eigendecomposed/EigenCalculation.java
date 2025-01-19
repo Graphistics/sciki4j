@@ -6,14 +6,17 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.apache.commons.math3.linear.RealMatrix;
+import org.ejml.data.Complex_F64;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.dense.row.CommonOps_DDRM;
 import org.ejml.dense.row.MatrixFeatures_DDRM;
-import org.ejml.dense.row.decomposition.eig.SwitchingEigenDecomposition_DDRM;
-import org.ejml.dense.row.decomposition.qr.QRDecompositionHouseholder_DDRM;
+import org.ejml.dense.row.factory.DecompositionFactory_DDRM;
 import org.ejml.interfaces.decomposition.EigenDecomposition_F64;
-import org.ejml.interfaces.decomposition.QRDecomposition;
 import org.ejml.simple.SimpleMatrix;
+import org.ojalgo.matrix.MatrixR064;
+import org.ojalgo.matrix.decomposition.Eigenvalue;
+import org.ojalgo.matrix.store.MatrixStore;
+import org.ojalgo.scalar.ComplexNumber;
 
 import definition.EdgeList2;
 import definition.NodeList2;
@@ -37,7 +40,147 @@ public class EigenCalculation {
             this.X = X;
         }
     }
+	
+    public static class EigenResultEJML {
+        public double[] eigenvalues;      // Array of eigenvalues
+        public DMatrixRMaj eigenvectors; // Matrix of eigenvectors
+        public DMatrixRMaj X;            // Matrix X (top-k eigenvectors)
 
+        EigenResultEJML(double[] eigenvalues, DMatrixRMaj eigenvectors, DMatrixRMaj X) {
+            this.eigenvalues = eigenvalues;
+            this.eigenvectors = eigenvectors;
+            this.X = X;
+        }
+    }
+    
+    public static EigenResultEJML calculateEigenEJML(DMatrixRMaj laplacianMatrix, int numberOfEigenvectors) {
+        // Check if the matrix is symmetric
+        boolean isSymmetric = isSymmetric(laplacianMatrix);
+
+        EigenResultEJML result = null;
+        try {
+            if (isSymmetric) {
+                // Try symmetric eigendecomposition
+                result = symmetricEigenDecompositionEJML(laplacianMatrix, numberOfEigenvectors);
+            }
+        } catch (Exception e) {
+            System.err.println("Symmetric eigendecomposition failed: " + e.getMessage());
+        }
+
+        // Fallback to generalized decomposition if symmetric fails or matrix is non-symmetric
+        if (result == null) {
+            result = generalEigenDecompositionEJML(laplacianMatrix, numberOfEigenvectors);
+        }
+
+        if (result == null) {
+            throw new RuntimeException("Both symmetric and generalized eigendecomposition failed.");
+        }
+
+        return result;
+    }
+    
+    private static EigenResultEJML symmetricEigenDecompositionEJML(DMatrixRMaj matrix, int numberOfEigenvectors) {
+        // Create a symmetric eigen decomposition instance
+        EigenDecomposition_F64<DMatrixRMaj> eigenDecomposition =
+                DecompositionFactory_DDRM.eig(matrix.numCols, true); // Symmetric = true
+
+        if (!eigenDecomposition.decompose(matrix)) {
+            throw new RuntimeException("Symmetric eigendecomposition failed.");
+        }
+
+        int n = eigenDecomposition.getNumberOfEigenvalues();
+        Complex_F64[] eigenvalues = new Complex_F64[n];
+        DMatrixRMaj eigenvectors = new DMatrixRMaj(matrix.numRows, n);
+
+        for (int i = 0; i < n; i++) {
+            // Retrieve the eigenvalue
+            eigenvalues[i] = eigenDecomposition.getEigenvalue(i);
+
+            // Retrieve the eigenvector
+            DMatrixRMaj vector = eigenDecomposition.getEigenVector(i);
+            if (vector != null) {
+                for (int j = 0; j < vector.numRows; j++) {
+                    eigenvectors.set(j, i, vector.get(j, 0));
+                }
+            }
+        }
+
+        // Convert eigenvalues to real parts for sorting (only real parts are used in spectral clustering)
+        double[] realEigenvalues = new double[n];
+        for (int i = 0; i < n; i++) {
+            realEigenvalues[i] = eigenvalues[i].real; // Use only the real part
+        }
+
+        // Sort eigenvalues and eigenvectors
+        return sortEigenvaluesAndVectors(realEigenvalues, eigenvectors, numberOfEigenvectors);
+    }
+
+
+    private static EigenResultEJML generalEigenDecompositionEJML(DMatrixRMaj matrix, int numberOfEigenvectors) {
+        EigenDecomposition_F64<DMatrixRMaj> eigenDecomposition = DecompositionFactory_DDRM.eig(matrix.numCols, true);
+        if (!eigenDecomposition.decompose(matrix)) {
+            throw new RuntimeException("General eigendecomposition failed.");
+        }
+
+        int numEigenvalues = eigenDecomposition.getNumberOfEigenvalues();
+        double[] eigenvalues = new double[numEigenvalues];
+        DMatrixRMaj eigenvectors = new DMatrixRMaj(matrix.numRows, numEigenvalues);
+
+        for (int i = 0; i < numEigenvalues; i++) {
+            Complex_F64 eigenvalue = eigenDecomposition.getEigenvalue(i);
+            if (!eigenvalue.isReal()) {
+//                throw new RuntimeException("Complex eigenvalue encountered in non-symmetric matrix.");
+            	eigenvalues[i] = eigenvalue.real;
+            } else {
+            	eigenvalues[i] = eigenvalue.real;
+            }
+            // Retrieve the eigenvector and set it column by column
+            DMatrixRMaj vector = eigenDecomposition.getEigenVector(i);
+            if (vector != null) {
+                for (int j = 0; j < vector.numRows; j++) {
+                    eigenvectors.set(j, i, vector.get(j, 0));
+                }
+            }  else {
+                // Handle null eigenvector case
+                for (int j = 0; j < matrix.numRows; j++) {
+                    eigenvectors.set(j, i, 0.0); // Assign zeros if eigenvector is null
+                }
+            }
+        }
+
+        // Sort eigenvalues and eigenvectors
+        return sortEigenvaluesAndVectors(eigenvalues, eigenvectors, numberOfEigenvectors);
+    }
+
+
+    private static EigenResultEJML sortEigenvaluesAndVectors(double[] eigenvalues, DMatrixRMaj eigenvectors, int k) {
+        int n = eigenvalues.length;
+        Integer[] indices = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            indices[i] = i;
+        }
+
+        Arrays.sort(indices, Comparator.comparingDouble(i -> eigenvalues[i]));
+
+        double[] sortedEigenvalues = new double[n];
+        DMatrixRMaj sortedEigenvectors = new DMatrixRMaj(eigenvectors.numRows, n);
+
+        for (int i = 0; i < n; i++) {
+            int idx = indices[i];
+            sortedEigenvalues[i] = eigenvalues[idx];
+            for (int row = 0; row < eigenvectors.numRows; row++) {
+                sortedEigenvectors.set(row, i, eigenvectors.get(row, idx));
+            }
+        }
+
+        DMatrixRMaj topKEigenvectors = CommonOps_DDRM.extract(sortedEigenvectors, 0, eigenvectors.numRows, 0, k);
+        return new EigenResultEJML(sortedEigenvalues, sortedEigenvectors, topKEigenvectors);
+    }
+
+    private static boolean isSymmetric(DMatrixRMaj matrix) {
+        return MatrixFeatures_DDRM.isIdentical(matrix, CommonOps_DDRM.transpose(matrix, null), 1e-10);
+    }
+    
     /**
      * Calculates the eigenvalues, eigenvectors, and X matrix from the provided Laplacian matrix.
      *
@@ -46,76 +189,51 @@ public class EigenCalculation {
      * @return EigenResult containing eigenvalues, eigenvectors, and X matrix.
      */
     public static Object calculateEigen(RealMatrix laplacian_matrix, double number_of_eigenvectors) {
-        // Convert RealMatrix to DMatrixRMaj (EJML data structure)
-        int rows = laplacian_matrix.getRowDimension();
-        int cols = laplacian_matrix.getColumnDimension();
-        DMatrixRMaj laplacianDMatrix = new DMatrixRMaj(rows, cols);
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                laplacianDMatrix.set(i, j, laplacian_matrix.getEntry(i, j));
-            }
-        }
-
-        // Check if the Laplacian matrix is symmetric
-        boolean is_symmetric;
-        try {
-            is_symmetric = isSymmetric(laplacianDMatrix);
-        } catch (IllegalArgumentException e) {
-            return e.getMessage(); // Return error if matrix is not square
-        }
+    	
+        MatrixR064 laplacianOjMatrix = convertToOjAlgoMatrix(laplacian_matrix);
 
         // Attempt primary decomposition
         EigenResult result = null;
-        if (is_symmetric) {
-            // Try standard eigen decomposition for symmetric matrices
-            result = standardEigenDecomposition(laplacianDMatrix);
-        }
 
-        // If the matrix is not symmetric or if the standard decomposition failed, attempt QR decomposition as fallback
-        if (!is_symmetric || result == null) {
-            try {
-                // Fallback to QR decomposition
-                result = qrEigenDecomposition(laplacianDMatrix, 1000, 1e-10);
-            } catch (Exception e) {
-                return "Error: QR decomposition fallback failed. " + e.getMessage();
-            }
-        }
+        result = generalEigenDecomposition(laplacianOjMatrix);
 
         // Sort eigenvalues and eigenvectors and return the result together with X matrix
         return sortEigenvaluesAndVectors(result.eigenvalues, result.eigenvectors, number_of_eigenvectors);
     }
 
-    /**
-     * Performs standard eigen decomposition on a symmetric matrix.
-     *
-     * @param matrix The Laplacian matrix in DMatrixRMaj format.
-     * @return EigenResult containing eigenvalues and eigenvectors.
-     */
-    private static EigenResult standardEigenDecomposition(DMatrixRMaj matrix) {
+    private static MatrixR064 convertToOjAlgoMatrix(RealMatrix realMatrix) {
+        double[][] data = realMatrix.getData();
+        return MatrixR064.FACTORY.rows(data);
+    }
+
+
+    
+    private static SimpleMatrix convertOjAlgoToSimpleMatrix(MatrixStore<Double> v) {
+        int rows = (int) v.countRows();
+        int cols = (int) v.countColumns();
+        SimpleMatrix simpleMatrix = new SimpleMatrix(rows, cols);
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                simpleMatrix.set(i, j, v.get(i, j));
+            }
+        }
+        return simpleMatrix;
+    }
+
+    private static EigenResult symmetricEigenDecomposition(MatrixR064 matrix) {
         try {
-            // Initialize the eigen decomposition
-            EigenDecomposition_F64<DMatrixRMaj> eigen_decomposition = new SwitchingEigenDecomposition_DDRM(matrix.getNumRows());
+            // Perform eigenvalue decomposition
+            Eigenvalue<Double> evd = Eigenvalue.R064.make(matrix);
+            evd.decompose(matrix);
 
-            // Perform the decomposition
-            if (!eigen_decomposition.decompose(matrix)) {
-                return null;  // Return null if decomposition fails
-            }
+            // Get eigenvalues and eigenvectors
+            double[] eigenvalues = evd.getEigenvalues().stream()
+                    .mapToDouble(ComplexNumber::getReal)
+                    .toArray();
 
-            // Extract eigenvalues and eigenvectors
-            int num_eigenvalues = eigen_decomposition.getNumberOfEigenvalues();
-            double[] eigenvalues = new double[num_eigenvalues];
-            SimpleMatrix eigenvectors = new SimpleMatrix(matrix.getNumRows(), num_eigenvalues);
-
-            for (int i = 0; i < num_eigenvalues; i++) {
-                if (!eigen_decomposition.getEigenvalue(i).isReal()) {
-                    continue;  // Skip complex eigenvalues
-                }
-                eigenvalues[i] = eigen_decomposition.getEigenvalue(i).getReal();
-                DMatrixRMaj eig_vector_matrix = eigen_decomposition.getEigenVector(i);
-                if (eig_vector_matrix != null) {
-                    eigenvectors.setColumn(i, 0, eig_vector_matrix.getData());
-                }
-            }
+            MatrixStore<Double> V = evd.getV();
+            SimpleMatrix eigenvectors = convertOjAlgoToSimpleMatrix(V);
 
             return new EigenResult(eigenvalues, eigenvectors, null);
         } catch (Exception e) {
@@ -123,116 +241,65 @@ public class EigenCalculation {
             return null;
         }
     }
+    
+    private static EigenResult generalEigenDecomposition(MatrixR064 matrix) {
+        // Create generalized eigen decomposition
+        Eigenvalue.Generalised<Double> generalisedEvD = Eigenvalue.R064.makeGeneralised(matrix);
 
-    /**
-     * Performs QR decomposition as a fallback method for eigen decomposition.
-     *
-     * @param matrix         The input matrix.
-     * @param max_iterations Maximum number of iterations.
-     * @param tolerance      Convergence tolerance.
-     * @return EigenResult containing eigenvalues and eigenvectors.
-     */
-    private static EigenResult qrEigenDecomposition(DMatrixRMaj matrix, int max_iterations, double tolerance) {
-        int n = matrix.numRows;
-        DMatrixRMaj Ak = matrix.copy();
-        DMatrixRMaj Q = new DMatrixRMaj(n, n);
-        DMatrixRMaj R = new DMatrixRMaj(n, n);
-        DMatrixRMaj Q_accumulated = CommonOps_DDRM.identity(n);
-        QRDecomposition<DMatrixRMaj> qr = new QRDecompositionHouseholder_DDRM();
+        // Decompose with both matrices
+        generalisedEvD.decompose(matrix);
 
-        // Iterate for a maximum number of iterations
-        for (int iter = 0; iter < max_iterations; iter++) {
-            // Perform QR decomposition
-            if (!qr.decompose(Ak)) {
-                throw new RuntimeException("QR Decomposition failed at iteration " + iter);
-            }
-            qr.getQ(Q, false);
-            qr.getR(R, false);
+        // Extract eigenvalues and eigenvectors
+        MatrixStore<Double> eigenvaluesMatrix = generalisedEvD.getD(); // Diagonal matrix of eigenvalues
+        MatrixStore<Double>  eigenvectorsMatrix = generalisedEvD.getV(); // Matrix with eigenvectors as columns
 
-            // Update Ak = R * Q
-            DMatrixRMaj Ak_new = new DMatrixRMaj(n, n);
-            CommonOps_DDRM.mult(R, Q, Ak_new);
-            Ak.setTo(Ak_new);
+        // Convert to custom format if needed
+        double[] eigenvalues = new double[(int) eigenvaluesMatrix.countRows()];
+        SimpleMatrix eigenvectors = new SimpleMatrix((int) eigenvectorsMatrix.countRows(), (int) eigenvectorsMatrix.countColumns());
 
-            // Accumulate Q matrices
-            DMatrixRMaj Q_new = new DMatrixRMaj(n, n);
-            CommonOps_DDRM.mult(Q_accumulated, Q, Q_new);
-            Q_accumulated.setTo(Q_new);
-
-            // Check for convergence
-            if (hasConverged(Ak, tolerance)) {
-                break;
+        for (int i = 0; i < eigenvalues.length; i++) {
+            eigenvalues[i] = eigenvaluesMatrix.get(i, i);
+            for (int j = 0; j < eigenvectors.getNumRows(); j++) {
+                eigenvectors.set(j, i, eigenvectorsMatrix.get(j, i));
             }
         }
 
-        // Extract eigenvalues from the diagonal of Ak
-        double[] eigenvalues = new double[n];
-        for (int i = 0; i < n; i++) {
-            eigenvalues[i] = Ak.get(i, i);
-        }
-
-        // Eigenvectors are the accumulated Q matrix
-        SimpleMatrix eigenvectors = SimpleMatrix.wrap(Q_accumulated);
+        eigenvectorsMatrix = eigenvectorsMatrix.transpose();
+        
         return new EigenResult(eigenvalues, eigenvectors, null);
     }
-
-    /**
-     * Sorts the eigenvalues and eigenvectors in ascending order and selects top-k eigenvectors for matrix X.
-     *
-     * @param eigenvalues           Array of eigenvalues.
-     * @param eigenvectors          Matrix of eigenvectors.
-     * @param number_of_eigenvectors Number of eigenvectors to select for matrix X.
-     * @return EigenResult containing sorted eigenvalues, eigenvectors, and matrix X.
-     */
+    
     private static EigenResult sortEigenvaluesAndVectors(double[] eigenvalues, SimpleMatrix eigenvectors, double number_of_eigenvectors) {
+        int n = eigenvalues.length;
+        int k = (int) number_of_eigenvectors;
+
         // Create an array of indices for sorting
-        Integer[] sorted_indices = new Integer[eigenvalues.length];
-        for (int i = 0; i < eigenvalues.length; i++) {
-            sorted_indices[i] = i;
+        Integer[] indices = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            indices[i] = i;
         }
 
-        // Sort the indices based on eigenvalues
-        Arrays.sort(sorted_indices, Comparator.comparingDouble(index -> eigenvalues[index]));
+        // Sort the indices based on eigenvalues in descending order
+//        Arrays.sort(indices, (i1, i2) -> Double.compare(eigenvalues[i2], eigenvalues[i1]));
+        Arrays.sort(indices, (i1, i2) -> Double.compare(eigenvalues[i1], eigenvalues[i2]));
 
         // Initialize sorted arrays
-        double[] sorted_eigenvalues = new double[eigenvalues.length];
-        SimpleMatrix sorted_eigenvectors = new SimpleMatrix(eigenvectors.getMatrix().getNumRows(), eigenvectors.getMatrix().getNumCols());
+        double[] sorted_eigenvalues = new double[n];
+        SimpleMatrix sorted_eigenvectors = new SimpleMatrix(eigenvectors.getNumRows(), n);
 
         // Populate the sorted eigenvalues and eigenvectors
-        for (int i = 0; i < eigenvalues.length; i++) {
-            int original_index = sorted_indices[i];
-            sorted_eigenvalues[i] = eigenvalues[original_index];
-            DMatrixRMaj column_vector = eigenvectors.extractVector(false, original_index).getDDRM();
-            for (int row = 0; row < sorted_eigenvectors.getNumRows(); row++) {
-                sorted_eigenvectors.set(row, i, column_vector.get(row, 0));
+        for (int i = 0; i < n; i++) {
+            int idx = indices[i];
+            sorted_eigenvalues[i] = eigenvalues[idx];
+            for (int row = 0; row < eigenvectors.getNumRows(); row++) {
+                sorted_eigenvectors.set(row, i, eigenvectors.get(row, idx));
             }
         }
-
-        // Determine the number of top eigenvectors to select
-        int k = (int) ((number_of_eigenvectors > 0) ? number_of_eigenvectors : calculateOptimalK(sorted_eigenvalues));
 
         // Select top-k eigenvectors for matrix X
-        SimpleMatrix X = sorted_eigenvectors.extractMatrix(0, sorted_eigenvectors.getMatrix().getNumRows(),
-                sorted_eigenvectors.getMatrix().getNumCols() - k, sorted_eigenvectors.getMatrix().getNumCols());
+        SimpleMatrix X = sorted_eigenvectors.extractMatrix(0, SimpleMatrix.END, n - k, n);
 
         return new EigenResult(sorted_eigenvalues, sorted_eigenvectors, X);
-    }
-
-    /**
-     * Checks if the matrix has converged based on the sub-diagonal elements.
-     *
-     * @param matrix        The matrix at the current iteration.
-     * @param tolerance Convergence tolerance.
-     * @return True if the matrix has converged, false otherwise.
-     */
-    private static boolean hasConverged(DMatrixRMaj matrix, double tolerance) {
-        int n = matrix.numRows;
-        for (int i = 1; i < n; i++) {
-            if (Math.abs(matrix.get(i, i - 1)) > tolerance) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
@@ -245,33 +312,29 @@ public class EigenCalculation {
         int index = EigenGap.findLargestEigenGap(eigenvalues);
         return index + 1;
     }
-
-    /**
-     * Checks if a matrix is symmetric.
-     *
-     * @param matrix The matrix to check.
-     * @return True if the matrix is symmetric, false otherwise.
-     * @throws IllegalArgumentException if the matrix is not square.
-     */
-    public static boolean isSymmetric(DMatrixRMaj matrix) {
-        if (matrix.numRows != matrix.numCols) {
+    
+    public static boolean isSymmetric(MatrixR064 matrix) {
+        if (matrix.countRows() != matrix.countColumns()) {
             throw new IllegalArgumentException("Error: Laplacian matrix is not square, so eigen decomposition cannot be applied.");
         }
-        DMatrixRMaj transpose = new DMatrixRMaj(matrix.numCols, matrix.numRows);
-        CommonOps_DDRM.transpose(matrix, transpose);
 
+        // Define a tolerance level for floating-point comparisons
         double tolerance = 1e-10;
-        return MatrixFeatures_DDRM.isIdentical(matrix, transpose, tolerance);
-    }
 
-    /**
-     * Creates an edge list based on the provided node properties, eigenvectors, and original edge list.
-     *
-     * @param node_properties_list List of node properties.
-     * @param X                    The matrix of eigenvectors.
-     * @param original_edge_list   The original edge list.
-     * @return ArrayList of EdgeList2 representing the new edge list.
-     */
+        // Compare matrix with its transpose
+        for (int i = 0; i < matrix.countRows(); i++) {
+            for (int j = 0; j < matrix.countColumns(); j++) {
+                double a = matrix.get(i, j);
+                double b = matrix.get(j, i);
+                if (Math.abs(a - b) > tolerance) {
+                    return false; // Not symmetric
+                }
+            }
+        }
+
+        return true; // Matrix is symmetric
+    }
+    
     public static ArrayList<EdgeList2> createEdgeList(List<NodeList2> node_properties_list, SimpleMatrix X, ArrayList<EdgeList2> original_edge_list) {
         ArrayList<EdgeList2> edge_list = new ArrayList<>();
 
@@ -284,13 +347,13 @@ public class EigenCalculation {
             for (int j = i + 1; j < num_rows; j++) {
                 double distance = distance_matrix[i][j];
 
-                String source_id = node_properties_list.get(i).getIndex();
-                String target_id = node_properties_list.get(j).getIndex();
+                float source_id = node_properties_list.get(i).getIndex();
+                float target_id = node_properties_list.get(j).getIndex();
 
                 // Check if there is an original edge between the nodes
                 boolean has_original_edge = original_edge_list.stream()
-                        .anyMatch(edge -> (edge.getSource().equals(source_id) && edge.getTarget().equals(target_id))
-                                || (edge.getSource().equals(target_id) && edge.getTarget().equals(source_id)));
+                        .anyMatch(edge -> (edge.getSource() == source_id && edge.getTarget() == target_id)
+                                || (edge.getSource() == target_id && edge.getTarget() == source_id));
 
                 if (has_original_edge) {
                     // Add the edge to the list with the computed distance

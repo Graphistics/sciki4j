@@ -91,7 +91,7 @@ public class ReadCsvTestData {
                 }
             }
             count++;
-            csvFileRow.add(new NodeList2(String.valueOf(count), TestDataArrayList));
+            csvFileRow.add(new NodeList2(count, TestDataArrayList));
         }
 
         return csvFileRow;
@@ -233,6 +233,27 @@ public class ReadCsvTestData {
 
         return sigmas;
     }
+    
+    public static int[][] calculateKNNIndices(Double[][] dist, String k) {
+        int dimension = dist.length;
+        int[][] knnIndices = new int[dimension][Integer.parseInt(k)];
+
+        for (int i = 0; i < dimension; i++) {
+            Integer[] sortedIndices = new Integer[dimension];
+            for (int j = 0; j < dimension; j++) {
+                sortedIndices[j] = j;
+            }
+            int node = i;
+
+            Arrays.sort(sortedIndices, Comparator.comparingDouble(a -> dist[node][a]));
+
+            for (int j = 0; j < Integer.parseInt(k); j++) {
+                knnIndices[i][j] = sortedIndices[j + 1];
+            }
+        }
+
+        return knnIndices;
+    }
 
     public static Double[] calculateLocalSigmas(Double[][] pdist, String sigma) {
         Double[] sigmas = new Double[pdist.length];
@@ -292,10 +313,12 @@ public class ReadCsvTestData {
                     adj[i][j] = 0.0;
                     continue;
                 }
-                if (dist_[i][j] <= epsilon) {
+                if (dist_[i][j] < epsilon) {
                     adj[i][j] = 1.0;
+                    adj[j][i] = 1.0;
                 } else {
                     adj[i][j] = 0.0;
+                    adj[j][i] = 0.0;
                 }
             }
         }
@@ -317,6 +340,20 @@ public class ReadCsvTestData {
                 } else {
                     adj[i][j] = 0.0;
                 }
+            }
+        }
+
+        return adj;
+    }
+    
+    public static Double[][] calculateKNNGraphWithIndices(Double[][] dist, int[][] knnIndices) {
+        int dimension = dist.length;
+        Double[][] adj = new Double[dimension][dimension];
+
+        for (int i = 0; i < dimension; i++) {
+            Arrays.fill(adj[i], 0.0);
+            for (int neighbor : knnIndices[i]) {
+                adj[i][neighbor] = 1.0;
             }
         }
 

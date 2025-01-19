@@ -42,7 +42,7 @@ public class ReadCsvFile {
                 String[] row = csvData.get(i);
 
                 // Assuming 'id' is one of the columns
-                String index = row[getIdOrIndexColumnIndex(headers)];
+                float index = getIdOrIndexColumnIndex(headers);
 
                 Map<String, Object> nodeProperties = extractPropertiesFromCSVRow(headers, row);
 

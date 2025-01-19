@@ -38,15 +38,16 @@ public class GraphTransform {
 //
 //    }
 
-    private static double euclideanDistance(double[] point1, double[] point2) {
-        double sum = 0.0;
-        for (int i = 0; i < point1.length; i++) {
-            double diff = point1[i] - point2[i];
-            sum += diff * diff;
-        }
-
-        return Math.sqrt(sum);
-    }
+//    private static double euclideanDistance(double[] point1, double[] point2) {
+//        double sum = 0.0;
+//        for (int i = 0; i < point1.length; i++) {
+//            double diff = point1[i] - point2[i];
+//            sum += diff * diff;
+//        }
+//
+//        return Math.sqrt(sum);
+//    }
+    
     public static double[][] convertToDoubleArray(ArrayList<ArrayList<String>> arrayList) {
         int numRows = arrayList.size();
         int numCols = arrayList.get(0).size(); // Assuming all inner lists have the same size
@@ -62,74 +63,70 @@ public class GraphTransform {
 
         return doubleArray;
     }
-
     
-    public static Double[][] euclideanDistance(List<NodeList2> nodeList) {
-
-    	int size = nodeList.size();
-        Double[][] distanceMatrix = new Double[size][size];
-
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++) {
-                double distance = calculateEuclideanDistance(nodeList.get(i), nodeList.get(j));
-                distanceMatrix[i][j] = distance;
-            }
-        }
-        return distanceMatrix;
-    }
-
-    private static double calculateEuclideanDistance(NodeList2 node1, NodeList2 node2) {
-        Map<String, Object> properties1 = node1.getProperties();
-        Map<String, Object> properties2 = node2.getProperties();
-
-        double sum = 0.0;
-
-        for (String propertyKey : properties1.keySet()) {
-            Object value1 = properties1.get(propertyKey);
-            Object value2 = properties2.get(propertyKey);
-
-            if (value1 instanceof Number && value2 instanceof Number) {
-                double diff = ((Number) value1).doubleValue() - ((Number) value2).doubleValue();
-                sum += Math.pow(diff, 2);
-            }
-        }
-        return Math.sqrt(sum);
-    }
-
+//    public static Double[][] euclideanDistance(List<NodeList2> nodeList) {
+//
+//    	int size = nodeList.size();
+//        Double[][] distanceMatrix = new Double[size][size];
+//
+//        for (int i = 0; i < size; i++) {
+//            for (int j = 0; j < size; j++) {
+//                double distance = calculateEuclideanDistance(nodeList.get(i), nodeList.get(j));
+//                distanceMatrix[i][j] = distance;
+//            }
+//        }
+//        return distanceMatrix;
+//    }
+//
+//    private static double calculateEuclideanDistance(NodeList2 node1, NodeList2 node2) {
+//        Map<String, Object> properties1 = node1.getProperties();
+//        Map<String, Object> properties2 = node2.getProperties();
+//
+//        double sum = 0.0;
+//
+//        for (String propertyKey : properties1.keySet()) {
+//            Object value1 = properties1.get(propertyKey);
+//            Object value2 = properties2.get(propertyKey);
+//
+//            if (value1 instanceof Number && value2 instanceof Number) {
+//                double diff = ((Number) value1).doubleValue() - ((Number) value2).doubleValue();
+//                sum += Math.pow(diff, 2);
+//            }
+//        }
+//        return Math.sqrt(sum);
+//    }
     
-    public static Double[][] calculateAdjMatrix(Double[][] distanceMatrix, String method, Double epsilon) {
-        try {
-        	Double[][] adj_mat;
-        	Double[] knn;
-        	Double[] sigmas;
-
-            switch (method) {
-                case "FULLY_CONNECTED":
-                	sigmas = calculateLocalSigmas(distanceMatrix);
-                    adj_mat = calculateAdjacencyMatrix(distanceMatrix, sigmas);
-                    break;
-                case "EPSILON":
-                	adj_mat = calculateEpsilonNeighbourhoodGraph(distanceMatrix,epsilon);;
-                    break;
-                case "KNN":
-    				knn = calculateKNN(distanceMatrix);
-    				adj_mat = calculateKNNGraph(distanceMatrix,knn);
-                    break;
-                case "MUTUAL_KNN":
-                	knn = calculateKNN(distanceMatrix);
-    				adj_mat = calculateMutualKNNGraph(distanceMatrix,knn);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid graph tranfsorm algorithm choice.");
-            }
-
-            return adj_mat;
-        } catch (Exception e) {
-            throw new RuntimeException("Error calculating graph transform: " + e.getMessage());
-        }
-    }
-
-
+//    public static Double[][] calculateAdjMatrix(Double[][] distanceMatrix, String method, Double epsilon) {
+//        try {
+//        	Double[][] adj_mat;
+//        	Double[] knn;
+//        	Double[] sigmas;
+//
+//            switch (method) {
+//                case "FULLY_CONNECTED":
+//                	sigmas = calculateLocalSigmas(distanceMatrix);
+//                    adj_mat = calculateAdjacencyMatrix(distanceMatrix, sigmas);
+//                    break;
+//                case "EPSILON":
+//                	adj_mat = calculateEpsilonNeighbourhoodGraph(distanceMatrix,epsilon);;
+//                    break;
+//                case "KNN":
+//    				knn = calculateKNN(distanceMatrix);
+//    				adj_mat = calculateKNNGraph(distanceMatrix,knn);
+//                    break;
+//                case "MUTUAL_KNN":
+//                	knn = calculateKNN(distanceMatrix);
+//    				adj_mat = calculateMutualKNNGraph(distanceMatrix,knn);
+//                    break;
+//                default:
+//                    throw new IllegalArgumentException("Invalid graph tranfsorm algorithm choice.");
+//            }
+//
+//            return adj_mat;
+//        } catch (Exception e) {
+//            throw new RuntimeException("Error calculating graph transform: " + e.getMessage());
+//        }
+//    }
 
     public static Double[] calculateKNN(Double[][] pdist) {
         int size = pdist.length;
@@ -226,8 +223,6 @@ public class GraphTransform {
             }
         }
 
-
-
         return adj;
     }
     
@@ -243,38 +238,39 @@ public class GraphTransform {
         return edgeList;
     }
 
-    public static ArrayList<String> getNodeList(ArrayList<ArrayList<String>> TestDataArrayList) {
-        ArrayList<String> nodeList = new ArrayList<>();
-        // add all the nodes to the nodeList all entries
-        for (int i = 0; i < TestDataArrayList.size(); i++) {
-            nodeList.add(i + "");
-        }
-        return nodeList;
-    }
+//    public static ArrayList<String> getNodeList(ArrayList<ArrayList<String>> TestDataArrayList) {
+//        ArrayList<String> nodeList = new ArrayList<>();
+//        // add all the nodes to the nodeList all entries
+//        for (int i = 0; i < TestDataArrayList.size(); i++) {
+//            nodeList.add(i + "");
+//        }
+//        return nodeList;
+//    }
 
-    public static List<NodeList2> getNodeList2(ArrayList<ArrayList<String>> TestDataArrayList) {
-        List<NodeList2> nodeList = new LinkedList<>();
-        // add all the nodes to the nodeList with entries and properties
-        for (int i = 0; i < TestDataArrayList.size(); i++) {
-            Map<String, Object> properties = new HashMap<>();
-            // Populate properties map as needed
-            // For example, you can use TestDataArrayList.get(i) to get the properties for each node
-
-            nodeList.add(new NodeList2(i + "", properties));
-        }
-        return nodeList;
-    }
+//    public static List<NodeList2> getNodeList2(ArrayList<ArrayList<String>> TestDataArrayList) {
+//        List<NodeList2> nodeList = new LinkedList<>();
+//        // add all the nodes to the nodeList with entries and properties
+//        for (int i = 0; i < TestDataArrayList.size(); i++) {
+//            Map<String, Object> properties = new HashMap<>();
+//            // Populate properties map as needed
+//            // For example, you can use TestDataArrayList.get(i) to get the properties for each node
+//
+//            nodeList.add(new NodeList2(i + "", properties));
+//        }
+//        return nodeList;
+//    }
 
     
     
     public static ArrayList<EdgeList2> calculateEdgeList(List<NodeList2> nodePropertiesList, Double[][] adj_mat) {
         ArrayList<EdgeList2> edgeList = new ArrayList<>();
-
+        long edgeIndex = 0;
+        
         for (int i = 0; i < adj_mat.length; i++) {
             for (int j = i + 1; j < adj_mat[i].length; j++) {
-                String sourceId = nodePropertiesList.get(i).getIndex();
-                String targetId = nodePropertiesList.get(j).getIndex();
-                edgeList.add(new EdgeList2(sourceId, targetId, adj_mat[i][j], i, null));
+                float sourceId = nodePropertiesList.get(i).getIndex();
+                float targetId = nodePropertiesList.get(j).getIndex();
+                edgeList.add(new EdgeList2(sourceId, targetId, adj_mat[i][j], edgeIndex++, null));
             }
         }
         return edgeList;
